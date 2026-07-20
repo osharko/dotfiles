@@ -1,0 +1,12 @@
+1password
+1password-cli
+dankcalendar-bin
+distroshelf
+dsearch-bin
+greetd-dms-greeter-bin
+ocrmypdf
+python-fpdf2
+qt6ct-kde
+quickemu
+quickgui-bin
+telegram-desktop-bin

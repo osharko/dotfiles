@@ -1,0 +1,39 @@
+// ! Auto-generated file. Do not edit directly.
+// Remove `include "dms/colors.kdl"` from your config to override.
+
+layout {
+    background-color "transparent"
+
+    focus-ring {
+        active-color   "#96d69a"
+        inactive-color "#908f9f"
+        urgent-color   "#ffb4ab"
+    }
+
+    border {
+        active-color   "#96d69a"
+        inactive-color "#908f9f"
+        urgent-color   "#ffb4ab"
+    }
+
+    shadow {
+        color "#00000070"
+    }
+
+    tab-indicator {
+        active-color   "#96d69a"
+        inactive-color "#908f9f"
+        urgent-color   "#ffb4ab"
+    }
+
+    insert-hint {
+        color "#96d69a80"
+    }
+}
+
+recent-windows {
+    highlight {
+        active-color   "#135224"
+        urgent-color   "#ffb4ab"
+    }
+}

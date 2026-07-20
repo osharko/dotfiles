@@ -1,0 +1,6 @@
+.env
+.env.example
+.gitignore
+init.sh
+pkglist.txt
+foreign-pkglist.txt

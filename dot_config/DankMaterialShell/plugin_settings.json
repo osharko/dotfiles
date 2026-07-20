@@ -1,0 +1,36 @@
+{
+  "wallpaperCarousel": {
+    "enabled": true,
+    "wallpaperDirectory": "/home/osharko/Immagini/Wallpapers/dank_wallpapers"
+  },
+  "bongoCat": {
+    "enabled": true,
+    "catColorMode": "primary",
+    "soundEnabled": true,
+    "showMetrics": true,
+    "catSizePercent": 100,
+    "enableBlinking": true
+  },
+  "dankNotepadModule": {
+    "enabled": true
+  },
+  "dockerManager": {
+    "enabled": true,
+    "dockerBinary": "podman",
+    "terminalApp": "ghostty --hold"
+  },
+  "screenCaptureToolbar": {
+    "enabled": true,
+    "videoFPS": "24",
+    "videoQuality": "very_high",
+    "customPath": "/home/osharko/Immagini/Screenshots",
+    "videoCustomPath": "/home/osharko/Video/Recording"
+  },
+  "displayManager": {
+    "enabled": true,
+    "brightness_DP-1": 51.05738146551724,
+    "brightness_HDMI-A-1": 50.60445851293104,
+    "contrast_HDMI-A-1": 50.425983297413794,
+    "contrast_DP-1": 51.53387661637932
+  }
+}

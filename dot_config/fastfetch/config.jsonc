@@ -1,0 +1,41 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "kitty",
+    "source": "/home/osharko/.config/fastfetch/shark.png",
+    "width": 36
+  },
+  "display": {
+    "separator": " "
+  },
+  "modules": [
+    { "type": "title", "keyWidth": 10 },
+    { "type": "os", "key": " OS", "keyColor": "yellow" },
+    { "type": "kernel", "key": "├ Kernel", "keyColor": "yellow" },
+    { "type": "packages", "key": "├󰏖 Packages", "keyColor": "yellow" },
+    { "type": "shell", "key": "├ Shell", "keyColor": "yellow" },
+    { "type": "uptime", "key": "└󰅐 Uptime", "keyColor": "yellow" },
+    "break",
+    { "type": "wm", "key": " WM", "keyColor": "blue" },
+    { "type": "theme", "key": "├󰉼 Theme", "keyColor": "blue" },
+    { "type": "icons", "key": "├󰀻 Icons", "keyColor": "blue" },
+    { "type": "font", "key": "├ Font", "keyColor": "blue" },
+    { "type": "terminal", "key": "├ Terminal", "keyColor": "blue" },
+    { "type": "localip", "key": "├󰩟 Local IP", "keyColor": "blue" },
+    { "type": "processes", "key": "└󰅐 Processes", "keyColor": "blue" },
+    "break",
+    { "type": "chassis", "key": "󰌢 PC", "keyColor": "green" },
+    { "type": "host", "key": "├󰌨 Host", "keyColor": "green" },
+    { "type": "cpu", "key": "├󰻠 CPU", "keyColor": "green" },
+    { "type": "gpu", "key": "├󰍛 GPU", "keyColor": "green" },
+    { "type": "memory", "key": "├󰑭 RAM", "keyColor": "green" },
+    { "type": "disk", "key": "├ Disk", "keyColor": "green", "folders": "/" },
+    { "type": "display", "key": "└󰍹 Display", "keyColor": "green" },
+    "break",
+    // { "type": "battery", "key": " Battery", "keyColor": "cyan" },
+    // { "type": "swap", "key": "├󰓡 Swap", "keyColor": "cyan" },
+    // { "type": "sound", "key": "├ Sound", "keyColor": "cyan" },
+    // { "type": "player", "key": "└󰝚 Player", "keyColor": "cyan" },
+    "colors"
+  ]
+}
