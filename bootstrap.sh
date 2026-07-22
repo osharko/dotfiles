@@ -24,19 +24,32 @@ if ! command -v chezmoi &>/dev/null; then
     paru -S --noconfirm --needed chezmoi
 fi
 
-# ── 2. Pacchetti ufficiali ──
+# ── Configura chezmoi ──
+CHEZMOI_CONFIG="$HOME/.config/chezmoi/chezmoi.toml"
+if [ ! -f "$CHEZMOI_CONFIG" ]; then
+    echo "▸ Configuring chezmoi source dir..."
+    mkdir -p "$(dirname "$CHEZMOI_CONFIG")"
+    printf 'sourceDir = "%s"\n' "$DOTFILES_DIR" > "$CHEZMOI_CONFIG"
+fi
+
+# ── 2. Abilita servizi ──
+echo "▸ Enabling services..."
+sudo systemctl enable --now greetd.service 2>/dev/null || sudo systemctl enable greetd.service
+sudo systemctl enable --now sshd.service 2>/dev/null || sudo systemctl enable sshd.service
+
+# ── 3. Pacchetti ufficiali ──
 if command -v pacman &>/dev/null; then
     echo "▸ Installing official packages..."
     xargs -d '\n' sudo pacman -S --noconfirm --needed < "$DOTFILES_DIR/pkglist.txt"
 fi
 
-# ── 3. Pacchetti AUR ──
+# ── 4. Pacchetti AUR ──
 if command -v paru &>/dev/null; then
     echo "▸ Installing AUR packages..."
     xargs -d '\n' paru -S --noconfirm --needed < "$DOTFILES_DIR/foreign-pkglist.txt"
 fi
 
-# ── 4. SSH da 1Password ──
+# ── 5. SSH da 1Password ──
 ENV_FILE="$DOTFILES_DIR/.env"
 [ -f "$ENV_FILE" ] && source "$ENV_FILE"
 
@@ -92,7 +105,7 @@ else
     echo "⚠ 1Password CLI not found — install 1password-cli (AUR) and re-run"
 fi
 
-# ── 5. Applica dotfiles con chezmoi ──
+# ── 6. Applica dotfiles con chezmoi ──
 echo "▸ Applying dotfiles..."
 chezmoi apply
 
