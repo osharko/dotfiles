@@ -9,4 +9,7 @@ python-fpdf2
 qt6ct-kde
 quickemu
 quickgui-bin
+speedtest-go-bin
+sublime-text-4
+surfshark-vpn-cli-bin
 telegram-desktop-bin
