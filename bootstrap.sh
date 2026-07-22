@@ -32,7 +32,11 @@ if [ ! -f "$CHEZMOI_CONFIG" ]; then
     printf 'sourceDir = "%s"\n' "$DOTFILES_DIR" > "$CHEZMOI_CONFIG"
 fi
 
-# ── 2. Configura greetd (DMS greeter) ──
+# ── 2. Abilita DMS user service ──
+echo "▸ Enabling DMS user service..."
+systemctl --user enable dms.service 2>/dev/null || true
+
+# ── 3. Configura greetd (DMS greeter) ──
 echo "▸ Configuring greetd..."
 sudo tee /etc/greetd/config.toml > /dev/null << 'EOFGREETD'
 [terminal]
@@ -92,23 +96,23 @@ sudo chmod 644 /etc/greetd/config.toml /etc/greetd/niri/config.kdl /etc/greetd/n
 sudo chown root:root /etc/greetd/config.toml
 sudo systemctl enable greetd.service
 
-# ── 3. Abilita servizi ──
+# ── 4. Abilita servizi ──
 echo "▸ Enabling services..."
 sudo systemctl enable --now sshd.service
 
-# ── 4. Pacchetti ufficiali ──
+# ── 5. Pacchetti ufficiali ──
 if command -v pacman &>/dev/null; then
     echo "▸ Installing official packages..."
     xargs -d '\n' sudo pacman -S --noconfirm --needed < "$DOTFILES_DIR/pkglist.txt"
 fi
 
-# ── 5. Pacchetti AUR ──
+# ── 6. Pacchetti AUR ──
 if command -v paru &>/dev/null; then
     echo "▸ Installing AUR packages..."
     xargs -d '\n' paru -S --noconfirm --needed < "$DOTFILES_DIR/foreign-pkglist.txt"
 fi
 
-# ── 6. SSH da 1Password ──
+# ── 7. SSH da 1Password ──
 ENV_FILE="$DOTFILES_DIR/.env"
 [ -f "$ENV_FILE" ] && source "$ENV_FILE"
 
@@ -172,7 +176,7 @@ else
     echo "⚠ 1Password CLI not found — install 1password-cli (AUR) and re-run"
 fi
 
-# ── 7. Applica dotfiles con chezmoi ──
+# ── 8. Applica dotfiles con chezmoi ──
 echo "▸ Applying dotfiles..."
 chezmoi apply
 
