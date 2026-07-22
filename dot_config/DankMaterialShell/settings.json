@@ -124,7 +124,7 @@
       "id": "brightnessSlider",
       "enabled": true,
       "width": 50,
-      "deviceName": "ddc:i2c-9"
+      "deviceName": "ddc:i2c-0"
     },
     {
       "id": "wifi",
@@ -407,7 +407,7 @@
   "batteryLowNotificationType": 0,
   "batteryCriticalNotificationType": 1,
   "batteryAutoPowerSaver": false,
-  "lockBeforeSuspend": false,
+  "lockBeforeSuspend": true,
   "loginctlLockIntegration": true,
   "fadeToLockEnabled": true,
   "fadeToLockGracePeriod": 5,
@@ -465,7 +465,7 @@
   "showDock": true,
   "dockAutoHide": false,
   "dockSmartAutoHide": false,
-  "dockUseOverlayLayer": true,
+  "dockUseOverlayLayer": false,
   "dockGroupByApp": true,
   "dockRestoreSpecialWorkspaceOnClick": false,
   "dockOpenOnOverview": true,
@@ -505,7 +505,7 @@
   "lockScreenShowProfileImage": true,
   "lockScreenShowPasswordField": true,
   "lockScreenShowMediaPlayer": true,
-  "lockScreenPowerOffMonitorsOnLock": false,
+  "lockScreenPowerOffMonitorsOnLock": true,
   "lockAtStartup": false,
   "enableFprint": false,
   "maxFprintTries": 15,
@@ -517,7 +517,7 @@
   "lockPamExternallyManaged": false,
   "lockU2fPamPath": "",
   "lockScreenInactiveColor": "#000000",
-  "lockScreenNotificationMode": 0,
+  "lockScreenNotificationMode": 1,
   "lockScreenVideoEnabled": false,
   "lockScreenVideoPath": "",
   "lockScreenVideoCycling": false,
@@ -561,7 +561,9 @@
     "poweroff",
     "lock",
     "suspend",
-    "restart"
+    "restart",
+    "switchuser",
+    "hibernate"
   ],
   "powerMenuDefaultAction": "logout",
   "powerMenuGridLayout": false,
