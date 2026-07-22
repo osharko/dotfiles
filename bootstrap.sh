@@ -32,24 +32,83 @@ if [ ! -f "$CHEZMOI_CONFIG" ]; then
     printf 'sourceDir = "%s"\n' "$DOTFILES_DIR" > "$CHEZMOI_CONFIG"
 fi
 
-# ── 2. Abilita servizi ──
-echo "▸ Enabling services..."
-sudo systemctl enable --now greetd.service 2>/dev/null || sudo systemctl enable greetd.service
-sudo systemctl enable --now sshd.service 2>/dev/null || sudo systemctl enable sshd.service
+# ── 2. Configura greetd (DMS greeter) ──
+echo "▸ Configuring greetd..."
+sudo tee /etc/greetd/config.toml > /dev/null << 'EOFGREETD'
+[terminal]
+vt = 1
 
-# ── 3. Pacchetti ufficiali ──
+[default_session]
+command = "/usr/bin/dms-greeter --command niri --cache-dir /var/cache/dms-greeter -C /etc/greetd/niri/config.kdl"
+user = "greeter"
+EOFGREETD
+
+sudo mkdir -p /etc/greetd/niri
+
+sudo tee /etc/greetd/niri/config.kdl > /dev/null << 'EOFNIRI'
+hotkey-overlay {
+    skip-at-startup
+}
+
+environment {
+    DMS_RUN_GREETER "1"
+}
+
+gestures {
+    hot-corners {
+        off
+    }
+}
+
+layout {
+    background-color "#000000"
+}
+
+include "/etc/greetd/niri/dms.kdl"
+EOFNIRI
+
+sudo tee /etc/greetd/niri/dms.kdl > /dev/null << 'EOFDMS'
+input {
+    keyboard {
+        xkb
+        numlock
+    }
+    touchpad {
+        tap
+        natural-scroll
+    }
+    mouse
+    trackpoint
+}
+
+debug {
+    honor-xdg-activation-with-invalid-serial
+}
+EOFDMS
+
+sudo chown -R root:greeter /etc/greetd/niri
+sudo chmod 755 /etc/greetd/niri
+sudo chmod 644 /etc/greetd/config.toml /etc/greetd/niri/config.kdl /etc/greetd/niri/dms.kdl
+sudo chown root:root /etc/greetd/config.toml
+sudo systemctl enable greetd.service
+
+# ── 3. Abilita servizi ──
+echo "▸ Enabling services..."
+sudo systemctl enable --now sshd.service
+
+# ── 4. Pacchetti ufficiali ──
 if command -v pacman &>/dev/null; then
     echo "▸ Installing official packages..."
     xargs -d '\n' sudo pacman -S --noconfirm --needed < "$DOTFILES_DIR/pkglist.txt"
 fi
 
-# ── 4. Pacchetti AUR ──
+# ── 5. Pacchetti AUR ──
 if command -v paru &>/dev/null; then
     echo "▸ Installing AUR packages..."
     xargs -d '\n' paru -S --noconfirm --needed < "$DOTFILES_DIR/foreign-pkglist.txt"
 fi
 
-# ── 5. SSH da 1Password ──
+# ── 6. SSH da 1Password ──
 ENV_FILE="$DOTFILES_DIR/.env"
 [ -f "$ENV_FILE" ] && source "$ENV_FILE"
 
@@ -79,7 +138,7 @@ EOF
 fi
 
 if command -v op &>/dev/null; then
-    if op whoami --format json 2>/dev/null; then
+    if timeout 5 op whoami --format json &>/dev/null; then
         echo "▸ Exporting SSH keys from 1Password..."
         mkdir -p "$(dirname "$SSH_PRIVATE_KEY_PATH")"
 
@@ -97,15 +156,23 @@ if command -v op &>/dev/null; then
 
         echo "✓ SSH keys exported"
     else
-        echo "⚠ 1Password not logged in."
-        echo "  Set OP_SERVICE_ACCOUNT_TOKEN in $ENV_FILE for headless auth."
-        echo "  Or run 'op signin' and re-run: cd \"$DOTFILES_DIR\" && ./bootstrap.sh"
+        echo "⚠ 1Password not logged in. You can:"
+        echo "   1. Set OP_SERVICE_ACCOUNT_TOKEN in $ENV_FILE, or"
+        echo "   2. Run 'op signin' then re-run: cd \"$DOTFILES_DIR\" && ./bootstrap.sh"
+        read -r -p "   Try 'op signin' now? [y/N] " REPLY
+        if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+            op signin
+            if timeout 5 op whoami --format json &>/dev/null; then
+                echo "▸ Signed in, re-running bootstrap..."
+                exec ./bootstrap.sh
+            fi
+        fi
     fi
 else
     echo "⚠ 1Password CLI not found — install 1password-cli (AUR) and re-run"
 fi
 
-# ── 6. Applica dotfiles con chezmoi ──
+# ── 7. Applica dotfiles con chezmoi ──
 echo "▸ Applying dotfiles..."
 chezmoi apply
 
