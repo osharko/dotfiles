@@ -1,8 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
-PROJECT_DIR="{{ .chezmoi.sourceDir }}"
-export PATH="$HOME/.local/bin:$PATH"
+PROJECT_DIR="${CHEZMOI_SOURCE_DIR:-"$(dirname "$(readlink -f "$0")")"}"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+# ── 0. Prerequisiti ──
+if ! command -v paru &>/dev/null; then
+    echo "▸ Installing paru..."
+    sudo pacman -S --noconfirm paru
+fi
+
+if ! command -v chezmoi &>/dev/null; then
+    echo "▸ Installing chezmoi..."
+    paru -S --noconfirm --needed chezmoi
+fi
 
 # ── 1. Pacchetti ufficiali ──
 if command -v pacman &>/dev/null; then
