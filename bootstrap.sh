@@ -181,3 +181,9 @@ echo "▸ Applying dotfiles..."
 chezmoi apply
 
 echo "✓ Bootstrap complete — reboot recommended"
+
+
+# broadcom fingerprint 
+# paru -Sy --noconfirm libfprint-tod libfprint-2-tod1-broadcom-cv3plus paru -Sy 
+# --noconfirm fprintd gnome-keyring
+# sudo systemctl enable --now fprintd

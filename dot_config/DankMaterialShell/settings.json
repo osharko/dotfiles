@@ -626,6 +626,10 @@
         {
           "id": "focusedWindow",
           "enabled": true
+        },
+        {
+          "id": "network_speed_monitor",
+          "enabled": true
         }
       ],
       "centerWidgets": [
@@ -679,10 +683,6 @@
           "minimumWidth": true
         },
         {
-          "id": "network_speed_monitor",
-          "enabled": true
-        },
-        {
           "id": "dockerManager",
           "enabled": true
         },
@@ -703,6 +703,16 @@
           "showMicIcon": true,
           "showMicPercent": true,
           "showDoNotDisturbIcon": true
+        },
+        {
+          "id": "battery",
+          "enabled": true,
+          "showBatteryPercent": true,
+          "showBatteryPercentOnlyOnBattery": false,
+          "showBatteryTime": false,
+          "showBatteryTimeOnlyOnBattery": false,
+          "batteryPillStyle": false,
+          "batteryPillPercentSign": false
         },
         {
           "id": "powerMenuButton",
@@ -730,7 +740,8 @@
       "visible": true,
       "popupGapsAuto": true,
       "popupGapsManual": 4,
-      "shadowIntensity": 0
+      "shadowIntensity": 0,
+      "widgetOutlineEnabled": false
     }
   ],
   "desktopClockEnabled": false,
