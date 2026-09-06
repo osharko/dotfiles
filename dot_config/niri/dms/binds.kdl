@@ -61,8 +61,6 @@ binds {
     Mod+WheelScrollUp cooldown-ms=150 { focus-workspace-up; }
     Alt+Print { screenshot-window; }
     Alt+XF86Launch1 { screenshot-window; }
-    Mod+BracketLeft { consume-or-expel-window-left; }
-    Mod+BracketRight { consume-or-expel-window-right; }
     Mod+C { center-column; }
     Mod+Ctrl+C { center-visible-columns; }
     Mod+Ctrl+End { move-column-to-last; }
@@ -80,6 +78,7 @@ binds {
     Mod+Ctrl+WheelScrollLeft { move-column-left; }
     Mod+Ctrl+WheelScrollRight { move-column-right; }
     Mod+Down { focus-window-down; }
+    Mod+Egrave { consume-or-expel-window-left; }
     Mod+End { focus-column-last; }
     Mod+Equal { set-column-width "+10%"; }
     Mod+F { maximize-column; }
@@ -121,6 +120,7 @@ binds {
     Mod+W { toggle-column-tabbed-display; }
     Mod+WheelScrollLeft { focus-column-left; }
     Mod+WheelScrollRight { focus-column-right; }
+    Mod+plus { consume-or-expel-window-right; }
     Mod+Shift+P { power-off-monitors; }
     Ctrl+Print { screenshot-screen; }
     Ctrl+XF86Launch1 { screenshot-screen; }
