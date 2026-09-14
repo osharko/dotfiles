@@ -1,7 +1,8 @@
 {
   "wallpaperCarousel": {
     "enabled": true,
-    "wallpaperDirectory": "/home/osharko/Immagini/Wallpapers/dank_wallpapers"
+    "wallpaperDirectory": "/home/osharko/Immagini/Wallpapers/dank_wallpapers",
+    "borderWidth": 2
   },
   "bongoCat": {
     "enabled": true,
@@ -32,5 +33,43 @@
     "brightness_HDMI-A-1": 50.60445851293104,
     "contrast_HDMI-A-1": 50.425983297413794,
     "contrast_DP-1": 51.53387661637932
+  },
+  "mpvpaper": {
+    "enabled": true,
+    "monitorPlaylists": {},
+    "playlistIndices": {},
+    "monitorVideos": {
+      "DP-1": "/home/osharko/Video/Wallpapers/coffee-shop.3840x2160.mp4",
+      "HDMI-A-1": "/home/osharko/Video/Wallpapers/coffee-shop.3840x2160.mp4"
+    },
+    "videoSettings": {
+      "/home/osharko/Video/Wallpapers/matrix-raining-particles.3840x2160.mp4": {
+        "hwdec": "auto",
+        "panscan": 1,
+        "volume": 0
+      },
+      "/home/osharko/Video/Wallpapers/matrix-raining-particles.1920x1080.mp4": {
+        "volume": 0
+      }
+    },
+    "restartInterval": 10,
+    "videoLibrary": [
+      "/home/osharko/Video/Wallpapers/orange-train-at-sunset.3840x2160.mp4",
+      "/home/osharko/Video/Wallpapers/smol-stelle-honkai-star-rail.3840x2160.mp4",
+      "/home/osharko/Video/Wallpapers/night-study-on-the-balcony.1920x1080.mp4",
+      "/home/osharko/Video/Wallpapers/lofi-girl-animated.1920x1080.mp4",
+      "/home/osharko/Video/Wallpapers/coffee-shop.3840x2160.mp4"
+    ]
+  },
+  "aiQuotas": {
+    "enabled": true,
+    "grokEnabled": false,
+    "antigravityEnabled": false,
+    "openRouterEnabled": false,
+    "deepSeekEnabled": false,
+    "codexEnabled": false,
+    "claudeEnabled": false,
+    "openCodeWorkspaceId": "",
+    "showResetCountdown": true
   }
 }
