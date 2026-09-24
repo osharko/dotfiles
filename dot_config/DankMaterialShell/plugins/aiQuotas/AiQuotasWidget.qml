@@ -1,0 +1,1795 @@
+import QtQuick
+import qs.Common
+import qs.Services
+import qs.Widgets
+import qs.Modules.Plugins
+
+PluginComponent {
+    id: root
+    pluginId: "aiQuotas"
+
+    property bool claudeEnabled: pluginData.claudeEnabled !== false
+    property bool codexEnabled: pluginData.codexEnabled !== false
+    property bool openCodeEnabled: pluginData.openCodeEnabled !== false
+    property bool deepSeekEnabled: pluginData.deepSeekEnabled !== false
+    property bool openRouterEnabled: pluginData.openRouterEnabled !== false
+    property bool antigravityEnabled: pluginData.antigravityEnabled !== false
+    property bool grokEnabled: pluginData.grokEnabled !== false
+    property string deepSeekApiKey: pluginData.deepSeekApiKey || ""
+    property string openRouterApiKey: pluginData.openRouterApiKey || ""
+    property string displayMode: pluginData.displayMode || "remaining"
+    property bool showResetTime: pluginData.showResetTime !== false
+    property bool showResetCountdown: pluginData.showResetCountdown === true
+    property string pluginDir: {
+        var url = Qt.resolvedUrl(".")
+        var path = url.toString()
+        if (path.indexOf("file://") === 0) path = path.substring(7)
+        return path
+    }
+
+    property var usageData: null
+    property var pinState: ({})
+    property string selectedProvider: "claude"
+
+    function loadUsageData() {
+        try {
+            var c = pluginService.loadPluginState("aiQuotas", "lastData", null)
+            if (c) root.usageData = c
+        } catch (e) {}
+    }
+
+    Component.onCompleted: {
+        root.loadPinState()
+        root.ensureSelectedProvider()
+        root.loadUsageData()
+    }
+
+    // PluginComponent injects pluginData after child completion during startup.
+    Connections {
+        target: root
+        function onPluginDataChanged() {
+            if (root.pluginData && Object.keys(root.pluginData).length > 0) {
+                Qt.callLater(function () {
+                    root.loadPinState()
+                    root.ensureSelectedProvider()
+                })
+            }
+        }
+    }
+
+    Connections {
+        target: root.pluginService
+        enabled: root.pluginService !== null
+        function onPluginDataChanged(changedPluginId) {
+            if (changedPluginId === "aiQuotas") {
+                Qt.callLater(function () {
+                    root.loadPinState()
+                    root.ensureSelectedProvider()
+                })
+            }
+        }
+    }
+
+    Connections {
+        target: root.pluginService
+        enabled: root.pluginService !== null
+        function onPluginStateChanged(changedPluginId) {
+            if (changedPluginId === "aiQuotas")
+                root.loadUsageData()
+        }
+    }
+
+    readonly property var providerIds: ["claude", "codex", "opencode", "deepseek", "openrouter", "grok", "antigravity"]
+
+    function defaultPinState() {
+        var openCodePin = savedSetting("pinnedWindow", "Rolling") || "Rolling"
+        return { claude: ["5h"], codex: ["5h"], opencode: [openCodePin], deepseek: ["balance"], openrouter: ["balance"], grok: ["Billing"], antigravity: ["Gemini Models - Five Hour Limit Remaining"] }
+    }
+
+    function savedSetting(key, fallback) {
+        try {
+            if (pluginService && pluginService.loadPluginData) {
+                var value = pluginService.loadPluginData("aiQuotas", key, fallback)
+                return value === undefined || value === null ? fallback : value
+            }
+        } catch (e) {}
+        return pluginData && pluginData[key] !== undefined && pluginData[key] !== null
+            ? pluginData[key] : fallback
+    }
+
+    function loadPinState() {
+        var raw = savedSetting("pinnedLimits", null)
+        if (typeof raw === "string") {
+            try { raw = JSON.parse(raw) } catch (e) { raw = null }
+        }
+        var defaults = defaultPinState()
+        var next = {}
+        var providers = providerIds
+        for (var i = 0; i < providers.length; i++) {
+            var provider = providers[i]
+            next[provider] = raw && Array.isArray(raw[provider]) ? raw[provider] : defaults[provider]
+        }
+        // Migrate old Grok API-status and plan-period pins to the stable billing pin.
+        if (next.grok && next.grok.length === 1
+                && (next.grok[0] === "status" || next.grok[0] === "Weekly"))
+            next.grok = defaults.grok.slice()
+        pinState = next
+    }
+
+    function savePinState() {
+        if (pluginService && pluginService.savePluginData)
+            pluginService.savePluginData("aiQuotas", "pinnedLimits", JSON.stringify(pinState))
+    }
+
+    function isPinned(provider, name) {
+        var pins = pinState[provider] || []
+        return pins.indexOf(name) >= 0
+    }
+
+    function togglePin(provider, name) {
+        var next = {}
+        var providers = providerIds
+        for (var i = 0; i < providers.length; i++)
+            next[providers[i]] = (pinState[providers[i]] || []).slice()
+        var pins = next[provider] || []
+        var index = pins.indexOf(name)
+        if (index >= 0) pins.splice(index, 1)
+        else pins.push(name)
+        next[provider] = pins
+        pinState = next
+        savePinState()
+    }
+
+    function pinnedEntries(provider, entries) {
+        var out = []
+        var pins = pinState[provider] || []
+        for (var i = 0; i < entries.length; i++) {
+            if (pins.indexOf(entries[i].name) >= 0) out.push(entries[i])
+        }
+        return out
+    }
+
+    function pinnedClaudeEntries() { return pinnedEntries("claude", claudeEntries()) }
+    function pinnedCodexEntries() { return pinnedEntries("codex", codexEntries()) }
+    function pinnedOpenCodeEntries() { return pinnedEntries("opencode", ocEntries()) }
+    function pinnedGrokEntries() { return pinnedEntries("grok", grokEntries()) }
+    function pinnedAntigravityEntries() { return pinnedEntries("antigravity", antigravityEntries()) }
+    function deepSeekPinned() { return isPinned("deepseek", "balance") }
+    function openRouterPinned() { return isPinned("openrouter", "balance") }
+
+    function providerEnabled(provider) {
+        if (provider === "claude") return claudeEnabled
+        if (provider === "codex") return codexEnabled
+        if (provider === "opencode") return openCodeEnabled
+        if (provider === "deepseek") return deepSeekEnabled
+        if (provider === "openrouter") return openRouterEnabled
+        if (provider === "grok") return grokEnabled
+        if (provider === "antigravity") return antigravityEnabled
+        return false
+    }
+
+    function providerTabs() {
+        var out = []
+        if (claudeEnabled) out.push({ id: "claude", label: "Claude", icon: "assets/claude-logo.svg" })
+        if (codexEnabled) out.push({ id: "codex", label: "Codex", icon: "assets/codex-logo.svg" })
+        if (openCodeEnabled) out.push({ id: "opencode", label: "OpenCode", icon: "assets/opencode-logo.svg" })
+        if (deepSeekEnabled) out.push({ id: "deepseek", label: "DeepSeek", icon: "assets/deepseek-logo.svg" })
+        if (openRouterEnabled) out.push({ id: "openrouter", label: "OpenRouter", icon: "assets/openrouter-logo.svg" })
+        if (grokEnabled) out.push({ id: "grok", label: "Grok", icon: "assets/grok-logo.svg" })
+        if (antigravityEnabled) out.push({ id: "antigravity", label: "Antigravity", icon: "assets/antigravity-logo.svg" })
+        return out
+    }
+
+    function ensureSelectedProvider() {
+        if (providerEnabled(selectedProvider)) return
+        var providers = providerIds
+        for (var i = 0; i < providers.length; i++) {
+            if (providerEnabled(providers[i])) {
+                selectedProvider = providers[i]
+                return
+            }
+        }
+    }
+
+
+    function claudeEntries() {
+        try {
+            if (!usageData || !usageData.claude) return []
+            if (usageData.claude.status !== "ok") return []
+            return usageData.claude.entries || []
+        } catch (e) { return [] }
+    }
+
+    function codexEntries() {
+        try {
+            if (!usageData || !usageData.codex) return []
+            if (usageData.codex.status !== "ok") return []
+            return usageData.codex.entries || []
+        } catch (e) { return [] }
+    }
+
+    function antigravityEntries() {
+        try {
+            if (!usageData || !usageData.antigravity) return []
+            if (usageData.antigravity.status !== "ok") return []
+            return usageData.antigravity.entries || []
+        } catch (e) { return [] }
+    }
+
+    function antigravityGroups() {
+        var entries = antigravityEntries()
+        var groups = []
+        var seen = {}
+        for (var i = 0; i < entries.length; i++) {
+            var entry = entries[i]
+            var parts = entry.name.split(" - ")
+            var groupName = parts.length > 1 ? parts[0] : "Antigravity Models"
+            var limitName = parts.length > 1 ? parts[1] : entry.name
+            if (!seen[groupName]) {
+                seen[groupName] = {
+                    name: groupName,
+                    entries: []
+                }
+                groups.push(seen[groupName])
+            }
+            seen[groupName].entries.push({
+                rawName: entry.name,
+                name: limitName,
+                percentUsed: entry.percentUsed,
+                resetAt: entry.resetAt
+            })
+        }
+        return groups
+    }
+
+    function hasDeepSeek() {
+        return deepSeekEnabled && deepSeekPinned() && dsBalance() != null
+    }
+
+    function hasOpenRouter() {
+        return openRouterEnabled && openRouterPinned() && orBalance() != null
+    }
+
+    function grokEntries() {
+        try {
+            if (!usageData || !usageData.grok) return []
+            if (usageData.grok.status !== "ok") return []
+            return usageData.grok.entries || []
+        } catch (e) { return [] }
+    }
+
+    function grokLabel(entry) {
+        try {
+            if (entry.kind === "on_demand") return "On-demand spending cap"
+            if (entry.kind === "plan") return "Weekly usage limit"
+            return entry.name
+        } catch (e) { return "Grok plan usage" }
+    }
+
+    function ocEntries() {
+        try {
+            if (!usageData || !usageData.opencode) return []
+            if (usageData.opencode.status !== "ok") return []
+            return usageData.opencode.entries || []
+        } catch (e) { return [] }
+    }
+
+    function dsBalance() {
+        try {
+            var balances = dsBalances()
+            return balances.length > 0 ? balances[0] : null
+        } catch (e) { return null }
+    }
+
+    function dsBalances() {
+        try {
+            if (!usageData || !usageData.deepseek) return []
+            if (usageData.deepseek.status !== "ok") return []
+            return usageData.deepseek.balances || []
+        } catch (e) { return [] }
+    }
+
+    function dsAvailabilityLabel() {
+        try {
+            if (!usageData || !usageData.deepseek) return "Waiting for balance data"
+            if (usageData.deepseek.isAvailable === true) return "Available for API calls"
+            if (usageData.deepseek.isAvailable === false) return "Insufficient balance for API calls"
+            return "Availability unknown"
+        } catch (e) { return "Availability unknown" }
+    }
+
+    function dsAvailabilityColor() {
+        try {
+            return usageData && usageData.deepseek && usageData.deepseek.isAvailable === false
+                ? Theme.error : Theme.primary
+        } catch (e) { return Theme.surfaceVariantText }
+    }
+
+    function orBalances() {
+        try {
+            if (!usageData || !usageData.openrouter) return []
+            if (usageData.openrouter.status !== "ok") return []
+            return usageData.openrouter.balances || []
+        } catch (e) { return [] }
+    }
+
+    function orBalance() {
+        try {
+            var balances = orBalances()
+            return balances.length > 0 ? balances[0] : null
+        } catch (e) { return null }
+    }
+
+    function ocLabel(entry) {
+        try {
+            return entry.name === "Rolling" ? "Rolling (5h)" : entry.name
+        } catch (e) { return "OpenCode" }
+    }
+
+    function claudeLabel(entry) {
+        try {
+            if (entry.name === "5h") return "5 hour usage limit"
+            if (entry.name === "Weekly") return "Weekly usage limit (all models)"
+            return entry.name + " usage limit"
+        } catch (e) { return "Claude usage limit" }
+    }
+
+    function codexLabel(entry) {
+        try {
+            if (entry.name === "5h") return "5 hour usage limit"
+            if (entry.name === "Weekly") return "Weekly usage limit"
+            if (entry.name === "Code Review") return "Code review usage limit"
+            return entry.name + " usage limit"
+        } catch (e) { return "Codex usage limit" }
+    }
+
+    function cdown(t) {
+        try {
+            if (!t) return "--"
+            var d = t - Date.now() / 1000
+            if (d <= 0) return "now"
+            var days = Math.floor(d / 86400)
+            var h = Math.floor((d % 86400) / 3600)
+            var m = Math.floor((d % 3600) / 60)
+            if (days > 0) return days + "d " + h + "h"
+            return h > 0 ? h + "h " + m + "m" : m + "m"
+        } catch (e) { return "--" }
+    }
+
+    function resetLabel(t) {
+        try {
+            if (!t) return "Reset time unavailable"
+            if (t <= Date.now() / 1000) return "Resets now"
+            if (showResetCountdown) return "Resets in " + cdown(t)
+            var d = new Date(t * 1000)
+            var h = d.getHours()
+            var suffix = h >= 12 ? "PM" : "AM"
+            h = h % 12 || 12
+            var minutes = ("0" + d.getMinutes()).slice(-2)
+            var time = h + ":" + minutes + " " + suffix
+            var today = new Date()
+            if (d.toDateString() === today.toDateString()) return "Resets " + time
+            var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            return "Resets " + months[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear() + " " + time
+        } catch (e) { return "Resets in " + cdown(t) }
+    }
+
+    function fmtBal(b) {
+        try {
+            if (!b) return "--"
+            return fmtMoney(b.total, b.currency)
+        } catch (e) { return "--" }
+    }
+
+    function fmtMoney(value, currency) {
+        try {
+            var amount = parseFloat(value)
+            if (!isFinite(amount)) return "--"
+            var suffix = currency === "USD" ? "$" : (currency === "CNY" ? "¥" : (currency || ""))
+            return amount.toFixed(2) + suffix
+        } catch (e) { return "--" }
+    }
+
+    function pctStr(pct) {
+        try {
+            if (pct < 0) return "--"
+            return displayMode === "used" ? pct + "% used" : (100 - pct) + "% remaining"
+        } catch (e) { return "--" }
+    }
+
+    function pctVal(pct) {
+        try {
+            if (pct < 0) return -1
+            return displayMode === "used" ? pct : 100 - pct
+        } catch (e) { return -1 }
+    }
+
+    function limitProgress(pct) {
+        try {
+            return Math.max(0, Math.min(100, pctVal(pct)))
+        } catch (e) { return 0 }
+    }
+
+    // --- Bar Pills ---
+
+    horizontalBarPill: Component {
+        StyledRect {
+            id: pill
+            implicitWidth: hRow.implicitWidth + Theme.spacingXS * 2
+            height: parent.widgetThickness
+            radius: Theme.cornerRadius
+            color: Theme.surfaceContainerHigh
+
+            Row {
+                id: hRow
+                anchors.centerIn: parent
+                spacing: Theme.spacingS
+
+                // Placeholder when nothing configured
+                StyledText {
+                    visible: !root.usageData
+                    text: "\u2733 -"
+                    color: Theme.surfaceTextMedium
+                    font.pixelSize: Theme.fontSizeMedium
+                }
+
+                // Claude pinned entries
+                Repeater {
+                    model: root.pinnedClaudeEntries()
+                    delegate: Row {
+                        spacing: 4
+                        Image {
+                            source: root.pluginDir + "assets/claude-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeMedium
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+
+                // Separator after Claude
+                Rectangle {
+                    visible: root.pinnedClaudeEntries().length > 0 && (root.pinnedCodexEntries().length > 0 || root.pinnedOpenCodeEntries().length > 0 || root.hasDeepSeek() || root.pinnedGrokEntries().length > 0 || root.pinnedAntigravityEntries().length > 0)
+                    width: 1
+                    height: pill.height - 8
+                    color: Theme.outlineVariant
+                    opacity: 0.4
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // Codex 5-hour limit
+                Repeater {
+                    model: root.pinnedCodexEntries()
+                    delegate: Row {
+                        spacing: 4
+                        Image {
+                            source: root.pluginDir + "assets/codex-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeMedium
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+
+                // Separator after Codex
+                Rectangle {
+                    visible: root.pinnedCodexEntries().length > 0 && (root.pinnedOpenCodeEntries().length > 0 || root.hasDeepSeek() || root.pinnedGrokEntries().length > 0 || root.pinnedAntigravityEntries().length > 0)
+                    width: 1
+                    height: pill.height - 8
+                    color: Theme.outlineVariant
+                    opacity: 0.4
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // OpenCode pinned entries
+                Repeater {
+                    model: root.pinnedOpenCodeEntries()
+                    delegate: Row {
+                        spacing: 4
+                        Image {
+                            source: root.pluginDir + "assets/opencode-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeMedium
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+
+                // Separator after OpenCode
+                Rectangle {
+                    visible: root.pinnedOpenCodeEntries().length > 0 && (root.hasDeepSeek() || root.hasOpenRouter() || root.pinnedGrokEntries().length > 0 || root.pinnedAntigravityEntries().length > 0)
+                    width: 1
+                    height: pill.height - 8
+                    color: Theme.outlineVariant
+                    opacity: 0.4
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // DeepSeek balance
+                Repeater {
+                    model: root.hasDeepSeek() ? [1] : []
+                    delegate: Row {
+                        spacing: 4
+                        Image {
+                            source: root.pluginDir + "assets/deepseek-logo.svg"
+                            sourceSize.width: 14
+                            sourceSize.height: 14
+                            width: 14; height: 14
+                            fillMode: Image.PreserveAspectFit
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        StyledText {
+                            text: root.fmtBal(root.dsBalance())
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeMedium
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+
+                // Separator after DeepSeek
+                Rectangle {
+                    visible: root.hasDeepSeek() && (root.hasOpenRouter() || root.pinnedGrokEntries().length > 0 || root.pinnedAntigravityEntries().length > 0)
+                    width: 1
+                    height: pill.height - 8
+                    color: Theme.outlineVariant
+                    opacity: 0.4
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // OpenRouter balance
+                Repeater {
+                    model: root.hasOpenRouter() ? [1] : []
+                    delegate: Row {
+                        spacing: 4
+                        Image {
+                            source: root.pluginDir + "assets/openrouter-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        StyledText {
+                            text: root.fmtBal(root.orBalance())
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeMedium
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+
+                // Separator after OpenRouter
+                Rectangle {
+                    visible: root.hasOpenRouter() && (root.pinnedGrokEntries().length > 0 || root.pinnedAntigravityEntries().length > 0)
+                    width: 1
+                    height: pill.height - 8
+                    color: Theme.outlineVariant
+                    opacity: 0.4
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // Grok pinned entries
+                Repeater {
+                    model: root.pinnedGrokEntries()
+                    delegate: Row {
+                        spacing: 4
+                        Image {
+                            source: root.pluginDir + "assets/grok-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeMedium
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+
+                // Separator after Grok
+                Rectangle {
+                    visible: root.pinnedGrokEntries().length > 0 && root.pinnedAntigravityEntries().length > 0
+                    width: 1
+                    height: pill.height - 8
+                    color: Theme.outlineVariant
+                    opacity: 0.4
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // Antigravity pinned entries
+                Repeater {
+                    model: root.pinnedAntigravityEntries()
+                    delegate: Row {
+                        spacing: 4
+                        Image {
+                            source: root.pluginDir + "assets/antigravity-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeMedium
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+
+
+    verticalBarPill: Component {
+        StyledRect {
+            id: pillV
+            width: parent.widgetThickness
+            implicitHeight: vCol.implicitHeight + Theme.spacingXS * 2
+            radius: Theme.cornerRadius
+            color: Theme.surfaceContainerHigh
+
+            Column {
+                id: vCol
+                anchors.centerIn: parent
+                spacing: Theme.spacingS
+
+                StyledText {
+                    visible: !root.usageData
+                    text: "\u2733"
+                    color: Theme.surfaceTextMedium
+                    font.pixelSize: Theme.fontSizeMedium
+                }
+
+                Repeater {
+                    model: root.pinnedClaudeEntries()
+                    delegate: Column {
+                        spacing: 1
+                        Image {
+                            source: root.pluginDir + "assets/claude-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeSmall
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: root.pinnedCodexEntries()
+                    delegate: Column {
+                        spacing: 1
+                        Image {
+                            source: root.pluginDir + "assets/codex-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeSmall
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: root.pinnedOpenCodeEntries()
+                    delegate: Column {
+                        spacing: 1
+                        Image {
+                            source: root.pluginDir + "assets/opencode-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeSmall
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: root.hasDeepSeek() ? [1] : []
+                    delegate: Column {
+                        spacing: 1
+                        Image {
+                            source: root.pluginDir + "assets/deepseek-logo.svg"
+                            sourceSize.width: 12
+                            sourceSize.height: 12
+                            width: 12; height: 12
+                            fillMode: Image.PreserveAspectFit
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        StyledText {
+                            text: {
+                                var b = root.dsBalance()
+                                return b ? (parseFloat(b.total) || 0).toFixed(0) : "--"
+                            }
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeSmall
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: root.hasOpenRouter() ? [1] : []
+                    delegate: Column {
+                        spacing: 1
+                        Image {
+                            source: root.pluginDir + "assets/openrouter-logo.svg"
+                            sourceSize.width: 14
+                            sourceSize.height: 14
+                            width: 14; height: 14
+                            fillMode: Image.PreserveAspectFit
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        StyledText {
+                            text: {
+                                var b = root.orBalance()
+                                return b ? (parseFloat(b.total) || 0).toFixed(0) : "--"
+                            }
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeSmall
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: root.pinnedGrokEntries()
+                    delegate: Column {
+                        spacing: 1
+                        Image {
+                            source: root.pluginDir + "assets/grok-logo.svg"
+                            sourceSize.width: 14
+                            sourceSize.height: 14
+                            width: 14; height: 14
+                            fillMode: Image.PreserveAspectFit
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeSmall
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: root.pinnedAntigravityEntries()
+                    delegate: Column {
+                        spacing: 1
+                        Image {
+                            source: root.pluginDir + "assets/antigravity-logo.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                            width: 16; height: 16
+                            fillMode: Image.PreserveAspectFit
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        StyledText {
+                            text: Math.round(root.pctVal(modelData.percentUsed || 0)) + "%"
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeSmall
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+
+    // --- Popout ---
+
+    popoutWidth: 420
+    popoutHeight: 700
+    popoutContent: Component {
+        PopoutComponent {
+            id: popout
+            headerText: "AI Quotas"
+            showCloseButton: true
+            closePopout: function () { popout.visible = false }
+
+            Column {
+                    width: parent.width - Theme.spacingM * 2
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: Theme.spacingM
+
+                    Row {
+                        id: providerTabsRow
+                        width: parent.width
+                        height: 36
+                        spacing: Theme.spacingXS
+
+                        Repeater {
+                            model: root.providerTabs()
+                            delegate: Rectangle {
+                                width: {
+                                    var tabs = root.providerTabs()
+                                    var N = tabs.length
+                                    var W = providerTabsRow.width - Theme.spacingXS * (N - 1)
+                                    var R = 1.8 // active-to-inactive width ratio
+                                    var sumWeights = R + (N - 1)
+                                    var U = W / sumWeights
+                                    return root.selectedProvider === modelData.id ? R * U : U
+                                }
+                                height: providerTabsRow.height
+                                radius: Theme.cornerRadius
+                                color: root.selectedProvider === modelData.id
+                                    ? Theme.surfaceSelected
+                                    : (tabMouse.containsMouse ? Theme.surfaceHover : Theme.surfaceContainerHigh)
+                                border.color: root.selectedProvider === modelData.id
+                                    ? Theme.outlineMedium : Theme.outlineVariant
+                                border.width: 1
+                                clip: true
+
+                                Behavior on width {
+                                    NumberAnimation { duration: 180; easing.type: Easing.InOutQuad }
+                                }
+
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: Theme.spacingXS
+
+                                    Image {
+                                        source: root.pluginDir + modelData.icon
+                                        sourceSize.width: 17
+                                        sourceSize.height: 17
+                                        width: 17; height: 17
+                                        fillMode: Image.PreserveAspectFit
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    StyledText {
+                                        visible: root.selectedProvider === modelData.id
+                                        text: modelData.label
+                                        color: root.selectedProvider === modelData.id
+                                            ? Theme.surfaceText : Theme.surfaceVariantText
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.selectedProvider = modelData.id
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Claude card ---
+                    StyledRect {
+                        visible: root.selectedProvider === "claude" && root.claudeEnabled
+                        width: parent.width
+                        height: claudeCard.implicitHeight + Theme.spacingM * 2
+                        radius: Theme.cornerRadius
+                        color: Theme.surfaceContainerHigh
+
+                        Column {
+                            id: claudeCard
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingM
+                            spacing: Theme.spacingS
+
+                            StyledText {
+                                visible: root.claudeEntries().length > 0
+                                text: root.usageData && root.usageData.claude && root.usageData.claude.plan
+                                    ? "Claude (" + root.usageData.claude.plan + ")" : "Claude"
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.Bold
+                            }
+
+                            StyledText {
+                                visible: root.usageData && root.usageData.claude && root.usageData.claude.stale === true
+                                text: root.usageData && root.usageData.claude && root.usageData.claude.capturedAt > 0
+                                    ? "Updated " + new Date(root.usageData.claude.capturedAt * 1000).toLocaleTimeString(
+                                        Qt.locale(), SettingsData.use24HourClock ? "HH:mm" : "h:mm AP") + " - may be stale"
+                                    : "Claude usage data is stale"
+                                color: Theme.warning
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+
+                            Repeater {
+                                model: root.claudeEntries()
+                                delegate: Column {
+                                    width: parent.width
+                                    spacing: Theme.spacingS
+                                    Row {
+                                        width: parent.width
+                                        spacing: Theme.spacingM
+                                        Image {
+                                            source: root.pluginDir + "assets/claude-logo.svg"
+                                            sourceSize.width: 28
+                                            sourceSize.height: 28
+                                            width: 28; height: 28
+                                            fillMode: Image.PreserveAspectFit
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                        Column {
+                                            width: parent.width - 40 - 28 - Theme.spacingM
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 2
+                                            StyledText {
+                                                text: root.claudeLabel(modelData)
+                                                color: Theme.surfaceVariantText
+                                                font.pixelSize: Theme.fontSizeSmall
+                                            }
+                                            StyledText {
+                                                text: root.pctStr(modelData.percentUsed || 0)
+                                                color: Theme.surfaceText
+                                                font.pixelSize: Theme.fontSizeLarge
+                                                font.weight: Font.Bold
+                                            }
+                                        }
+                                        Rectangle {
+                                            width: 28; height: 28; radius: 14
+                                            color: root.isPinned("claude", modelData.name)
+                                                ? Theme.surfaceSelected
+                                                : (claudePinArea.containsMouse ? Theme.surfaceHover : Theme.surfaceContainerHighest)
+                                            border.color: root.isPinned("claude", modelData.name)
+                                                ? Theme.outlineMedium : Theme.outlineVariant
+                                            border.width: 1
+                                            anchors.verticalCenter: parent.verticalCenter
+
+                                            MouseArea {
+                                                id: claudePinArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.togglePin("claude", modelData.name)
+                                            }
+
+                                            DankIcon {
+                                                anchors.centerIn: parent
+                                                name: "push_pin"
+                                                size: 17
+                                                color: root.isPinned("claude", modelData.name)
+                                                    ? Theme.primary : Theme.surfaceVariantText
+                                                rotation: root.isPinned("claude", modelData.name) ? 0 : 45
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        id: claudeProgressTrack
+                                        width: parent.width
+                                        height: 8
+                                        radius: 4
+                                        color: Theme.outlineVariant
+                                        Rectangle {
+                                            width: claudeProgressTrack.width * root.limitProgress(modelData.percentUsed || 0) / 100
+                                            height: parent.height
+                                            radius: parent.radius
+                                            color: Theme.primary
+                                        }
+                                    }
+                                    StyledText {
+                                        visible: root.showResetTime && modelData.resetAt > 0
+                                        text: root.resetLabel(modelData.resetAt)
+                                        color: Theme.surfaceVariantText
+                                        font.pixelSize: Theme.fontSizeSmall
+                                    }
+                                }
+                            }
+
+                            StyledText {
+                                visible: root.claudeEntries().length === 0
+                                width: parent.width
+                                wrapMode: Text.WordWrap
+                                color: {
+                                    var c = root.usageData && root.usageData.claude
+                                    return c && (c.reason === "not_authenticated" || c.reason === "auth_expired")
+                                        ? Theme.warning : Theme.surfaceVariantText
+                                }
+                                font.pixelSize: Theme.fontSizeSmall
+                                text: {
+                                    if (!root.usageData) return "Loading..."
+                                    var c = root.usageData.claude
+                                    if (c && c.reason === "not_authenticated")
+                                        return "Claude is not connected.\nRun claude in a terminal and sign in, then wait for the next refresh."
+                                    if (c && c.reason === "auth_expired")
+                                        return "Claude login expired.\nStart claude in a terminal to refresh it, then wait for the next refresh."
+                                    if (c && c.error) return c.error
+                                    return "No Claude usage data."
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Codex card ---
+                    StyledRect {
+                        visible: root.selectedProvider === "codex" && root.codexEnabled
+                        width: parent.width
+                        height: codexCard.implicitHeight + Theme.spacingM * 2
+                        radius: Theme.cornerRadius
+                        color: Theme.surfaceContainerHigh
+
+                        Column {
+                            id: codexCard
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingM
+                            spacing: Theme.spacingS
+
+                            StyledText {
+                                visible: root.codexEntries().length > 0
+                                text: root.usageData && root.usageData.codex && root.usageData.codex.plan
+                                    ? "Codex (" + root.usageData.codex.plan + ")" : "Codex"
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.Bold
+                            }
+
+                            Repeater {
+                                model: root.codexEntries()
+                                delegate: Column {
+                                    width: parent.width
+                                    spacing: Theme.spacingS
+                                    Row {
+                                        width: parent.width
+                                        spacing: Theme.spacingM
+                                        Image {
+                                            source: root.pluginDir + "assets/codex-logo.svg"
+                                            sourceSize.width: 28
+                                            sourceSize.height: 28
+                                            width: 28; height: 28
+                                            fillMode: Image.PreserveAspectFit
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                        Column {
+                                            width: parent.width - 40 - 28 - Theme.spacingM
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 2
+                                            StyledText {
+                                                text: root.codexLabel(modelData)
+                                                color: Theme.surfaceVariantText
+                                                font.pixelSize: Theme.fontSizeSmall
+                                            }
+                                            StyledText {
+                                                text: root.pctStr(modelData.percentUsed || 0)
+                                                color: Theme.surfaceText
+                                                font.pixelSize: Theme.fontSizeLarge
+                                                font.weight: Font.Bold
+                                            }
+                                        }
+                                        Rectangle {
+                                            width: 28; height: 28; radius: 14
+                                            color: root.isPinned("codex", modelData.name)
+                                                ? Theme.surfaceSelected
+                                                : (codexPinArea.containsMouse ? Theme.surfaceHover : Theme.surfaceContainerHighest)
+                                            border.color: root.isPinned("codex", modelData.name)
+                                                ? Theme.outlineMedium : Theme.outlineVariant
+                                            border.width: 1
+                                            anchors.verticalCenter: parent.verticalCenter
+
+                                            MouseArea {
+                                                id: codexPinArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.togglePin("codex", modelData.name)
+                                            }
+
+                                            DankIcon {
+                                                anchors.centerIn: parent
+                                                name: "push_pin"
+                                                size: 17
+                                                color: root.isPinned("codex", modelData.name)
+                                                    ? Theme.primary : Theme.surfaceVariantText
+                                                rotation: root.isPinned("codex", modelData.name) ? 0 : 45
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        id: codexProgressTrack
+                                        width: parent.width
+                                        height: 8
+                                        radius: 4
+                                        color: Theme.outlineVariant
+                                        Rectangle {
+                                            width: codexProgressTrack.width * root.limitProgress(modelData.percentUsed || 0) / 100
+                                            height: parent.height
+                                            radius: parent.radius
+                                            color: Theme.primary
+                                        }
+                                    }
+                                    StyledText {
+                                        visible: root.showResetTime && modelData.resetAt > 0
+                                        text: root.resetLabel(modelData.resetAt)
+                                        color: Theme.surfaceVariantText
+                                        font.pixelSize: Theme.fontSizeSmall
+                                    }
+                                }
+                            }
+
+                            StyledText {
+                                visible: root.codexEntries().length === 0
+                                width: parent.width
+                                wrapMode: Text.WordWrap
+                                color: {
+                                    var c = root.usageData && root.usageData.codex
+                                    return c && (c.reason === "not_authenticated" || c.reason === "auth_expired")
+                                        ? Theme.warning : Theme.surfaceVariantText
+                                }
+                                font.pixelSize: Theme.fontSizeSmall
+                                text: {
+                                    if (!root.usageData) return "Loading..."
+                                    var c = root.usageData.codex
+                                    if (c && c.reason === "not_authenticated")
+                                        return "Codex is not connected.\nRun codex login in a terminal, then wait for the next refresh."
+                                    if (c && c.reason === "auth_expired")
+                                        return "Codex login expired.\nRun codex login again, then wait for the next refresh."
+                                    if (c && c.error) return c.error
+                                    return "No Codex usage data."
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Antigravity container ---
+                    Column {
+                        visible: root.selectedProvider === "antigravity" && root.antigravityEnabled
+                        width: parent.width
+                        spacing: Theme.spacingM
+
+                        Repeater {
+                            model: root.antigravityGroups()
+                            delegate: StyledRect {
+                                width: parent.width
+                                height: agyGroupColumn.implicitHeight + Theme.spacingM * 2
+                                radius: Theme.cornerRadius
+                                color: Theme.surfaceContainerHigh
+
+                                Column {
+                                    id: agyGroupColumn
+                                    anchors.fill: parent
+                                    anchors.margins: Theme.spacingM
+                                    spacing: Theme.spacingS
+
+                                    StyledText {
+                                        text: modelData.name
+                                        color: Theme.surfaceVariantText
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        font.weight: Font.Bold
+                                    }
+
+                                    Repeater {
+                                        model: modelData.entries
+                                        delegate: Column {
+                                            width: parent.width
+                                            spacing: Theme.spacingS
+                                            Row {
+                                                width: parent.width
+                                                spacing: Theme.spacingM
+                                                Image {
+                                                    source: root.pluginDir + "assets/antigravity-logo.svg"
+                                                    sourceSize.width: 28
+                                                    sourceSize.height: 28
+                                                    width: 28; height: 28
+                                                    fillMode: Image.PreserveAspectFit
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
+                                                Column {
+                                                    width: parent.width - 40 - 28 - Theme.spacingM
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    spacing: 2
+                                                    StyledText {
+                                                        text: modelData.name
+                                                        color: Theme.surfaceVariantText
+                                                        font.pixelSize: Theme.fontSizeSmall
+                                                        font.weight: Font.DemiBold
+                                                    }
+                                                    StyledText {
+                                                        text: root.pctStr(modelData.percentUsed || 0)
+                                                        color: Theme.surfaceText
+                                                        font.pixelSize: Theme.fontSizeLarge
+                                                        font.weight: Font.Bold
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    width: 28; height: 28; radius: 14
+                                                    color: root.isPinned("antigravity", modelData.rawName)
+                                                        ? Theme.surfaceSelected
+                                                        : (agyPinArea.containsMouse ? Theme.surfaceHover : Theme.surfaceContainerHighest)
+                                                    border.color: root.isPinned("antigravity", modelData.rawName)
+                                                        ? Theme.outlineMedium : Theme.outlineVariant
+                                                    border.width: 1
+                                                    anchors.verticalCenter: parent.verticalCenter
+
+                                                    MouseArea {
+                                                        id: agyPinArea
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: root.togglePin("antigravity", modelData.rawName)
+                                                    }
+
+                                                    DankIcon {
+                                                        anchors.centerIn: parent
+                                                        name: "push_pin"
+                                                        size: 17
+                                                        color: root.isPinned("antigravity", modelData.rawName)
+                                                            ? Theme.primary : Theme.surfaceVariantText
+                                                        rotation: root.isPinned("antigravity", modelData.rawName) ? 0 : 45
+                                                    }
+                                                }
+                                            }
+                                            Rectangle {
+                                                id: agyProgressTrack
+                                                width: parent.width
+                                                height: 8
+                                                radius: 4
+                                                color: Theme.outlineVariant
+                                                Rectangle {
+                                                    width: agyProgressTrack.width * root.limitProgress(modelData.percentUsed || 0) / 100
+                                                    height: parent.height
+                                                    radius: parent.radius
+                                                    color: Theme.primary
+                                                }
+                                            }
+                                            StyledText {
+                                                visible: root.showResetTime && modelData.resetAt > 0
+                                                text: root.resetLabel(modelData.resetAt)
+                                                color: Theme.surfaceVariantText
+                                                font.pixelSize: Theme.fontSizeSmall
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        StyledRect {
+                            visible: root.antigravityEntries().length === 0
+                            width: parent.width
+                            height: agyErrorCard.implicitHeight + Theme.spacingM * 2
+                            radius: Theme.cornerRadius
+                            color: Theme.surfaceContainerHigh
+
+                            Column {
+                                id: agyErrorCard
+                                anchors.fill: parent
+                                anchors.margins: Theme.spacingM
+                                spacing: Theme.spacingS
+
+                                StyledText {
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
+                                    color: {
+                                        var a = root.usageData && root.usageData.antigravity
+                                        return a && a.reason === "not_authenticated" ? Theme.warning : Theme.surfaceVariantText
+                                    }
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    text: {
+                                        if (!root.usageData) return "Loading..."
+                                        var a = root.usageData.antigravity
+                                        if (a && a.reason === "not_authenticated")
+                                            return "Antigravity is not connected.\nRun agy login in a terminal, then wait for the next refresh."
+                                        if (a && a.error) return a.error
+                                        return "No Antigravity usage data."
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // --- OpenCode card ---
+                    StyledRect {
+                        visible: root.selectedProvider === "opencode" && root.openCodeEnabled
+                        width: parent.width
+                        height: ocCard.implicitHeight + Theme.spacingM * 2
+                        radius: Theme.cornerRadius
+                        color: Theme.surfaceContainerHigh
+
+                        Column {
+                            id: ocCard
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingM
+                            spacing: Theme.spacingS
+
+                            StyledText {
+                                visible: root.ocEntries().length > 0
+                                text: "OpenCode Go"
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.Bold
+                            }
+
+                            // OpenCode windows
+                            Repeater {
+                                model: root.ocEntries()
+                                delegate: Column {
+                                    width: parent.width
+                                    spacing: Theme.spacingS
+                                    Row {
+                                        width: parent.width
+                                        spacing: Theme.spacingM
+                                        Image {
+                                            source: root.pluginDir + "assets/opencode-logo.svg"
+                                            sourceSize.width: 28
+                                            sourceSize.height: 28
+                                            width: 28; height: 28
+                                            fillMode: Image.PreserveAspectFit
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                        Column {
+                                            width: parent.width - 40 - 28 - Theme.spacingM
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 2
+                                            StyledText {
+                                                text: root.ocLabel(modelData)
+                                                color: Theme.surfaceVariantText
+                                                font.pixelSize: Theme.fontSizeSmall
+                                            }
+                                            StyledText {
+                                                text: root.pctStr(modelData.percentUsed || 0)
+                                                color: Theme.surfaceText
+                                                font.pixelSize: Theme.fontSizeLarge
+                                                font.weight: Font.Bold
+                                            }
+                                        }
+                                        Rectangle {
+                                            width: 28; height: 28; radius: 14
+                                            color: root.isPinned("opencode", modelData.name)
+                                                ? Theme.surfaceSelected
+                                                : (openCodePinArea.containsMouse ? Theme.surfaceHover : Theme.surfaceContainerHighest)
+                                            border.color: root.isPinned("opencode", modelData.name)
+                                                ? Theme.outlineMedium : Theme.outlineVariant
+                                            border.width: 1
+                                            anchors.verticalCenter: parent.verticalCenter
+
+                                            MouseArea {
+                                                id: openCodePinArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.togglePin("opencode", modelData.name)
+                                            }
+
+                                            DankIcon {
+                                                anchors.centerIn: parent
+                                                name: "push_pin"
+                                                size: 17
+                                                color: root.isPinned("opencode", modelData.name)
+                                                    ? Theme.primary : Theme.surfaceVariantText
+                                                rotation: root.isPinned("opencode", modelData.name) ? 0 : 45
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        id: openCodeProgressTrack
+                                        width: parent.width
+                                        height: 8
+                                        radius: 4
+                                        color: Theme.outlineVariant
+                                        Rectangle {
+                                            width: openCodeProgressTrack.width * root.limitProgress(modelData.percentUsed || 0) / 100
+                                            height: parent.height
+                                            radius: parent.radius
+                                            color: Theme.primary
+                                        }
+                                    }
+                                    StyledText {
+                                        visible: root.showResetTime && modelData.resetAt > 0
+                                        text: root.resetLabel(modelData.resetAt)
+                                        color: Theme.surfaceVariantText
+                                        font.pixelSize: Theme.fontSizeSmall
+                                    }
+                                }
+                            }
+
+                            // OpenCode unavailable
+                            StyledText {
+                                visible: root.ocEntries().length === 0
+                                width: parent.width
+                                wrapMode: Text.WordWrap
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                text: {
+                                    if (!root.usageData) return "Loading..."
+                                    var o = root.usageData.opencode
+                                    if (o && o.error) return o.error
+                                    if (o && o.status === "unavailable") return "Set OpenCode credentials in plugin settings."
+                                    return "No OpenCode data."
+                                }
+                            }
+                        }
+                    }
+
+                    // --- DeepSeek card ---
+                    StyledRect {
+                        visible: root.selectedProvider === "deepseek" && root.deepSeekEnabled
+                        width: parent.width
+                        height: dsCard.implicitHeight + Theme.spacingM * 2
+                        radius: Theme.cornerRadius
+                        color: Theme.surfaceContainerHigh
+
+                        Column {
+                            id: dsCard
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingM
+                            spacing: Theme.spacingS
+
+                            StyledText {
+                                visible: root.dsBalance() != null
+                                text: "DeepSeek API balance"
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.Bold
+                            }
+
+                            StyledText {
+                                visible: root.dsBalance() != null
+                                    && (!root.usageData.deepseek || root.usageData.deepseek.isAvailable !== true)
+                                text: root.dsAvailabilityLabel()
+                                color: root.dsAvailabilityColor()
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+
+                            // DeepSeek balance
+                            Repeater {
+                                model: root.dsBalances()
+                                delegate: Row {
+                                    width: parent.width
+                                    spacing: Theme.spacingM
+                                    Image {
+                                            source: root.pluginDir + "assets/deepseek-logo.svg"
+                                        sourceSize.width: 28
+                                        sourceSize.height: 28
+                                        width: 28; height: 28
+                                        fillMode: Image.PreserveAspectFit
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Column {
+                                        width: parent.width - 40 - 28 - Theme.spacingM
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 2
+                                        StyledText { text: "Available balance"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                                        StyledText { text: root.fmtBal(modelData); color: Theme.surfaceText; font.pixelSize: Theme.fontSizeLarge; font.weight: Font.Bold }
+                                        StyledText {
+                                            visible: parseFloat(modelData.granted) > 0
+                                            text: "Granted (unexpired): " + root.fmtMoney(modelData.granted, modelData.currency)
+                                            color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall
+                                        }
+                                        StyledText {
+                                            visible: parseFloat(modelData.toppedUp) > 0
+                                            text: "Top-up (paid): " + root.fmtMoney(modelData.toppedUp, modelData.currency)
+                                            color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall
+                                        }
+                                    }
+                                    Rectangle {
+                                        width: 28; height: 28; radius: 14
+                                        color: root.isPinned("deepseek", "balance")
+                                            ? Theme.surfaceSelected
+                                            : (deepSeekPinArea.containsMouse ? Theme.surfaceHover : Theme.surfaceContainerHighest)
+                                        border.color: root.isPinned("deepseek", "balance")
+                                            ? Theme.outlineMedium : Theme.outlineVariant
+                                        border.width: 1
+                                        anchors.verticalCenter: parent.verticalCenter
+
+                                        MouseArea {
+                                            id: deepSeekPinArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.togglePin("deepseek", "balance")
+                                        }
+
+                                        DankIcon {
+                                            anchors.centerIn: parent
+                                            name: "push_pin"
+                                            size: 17
+                                            color: root.isPinned("deepseek", "balance")
+                                                ? Theme.primary : Theme.surfaceVariantText
+                                            rotation: root.isPinned("deepseek", "balance") ? 0 : 45
+                                        }
+                                    }
+                                }
+                            }
+
+                            // DeepSeek unavailable
+                            StyledText {
+                                visible: !root.dsBalance()
+                                width: parent.width
+                                wrapMode: Text.WordWrap
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                text: {
+                                    if (!root.usageData) return "Loading..."
+                                    var d = root.usageData.deepseek
+                                    if (d && d.error) return d.error
+                                    if (root.deepSeekApiKey.length === 0) return "Set DeepSeek API key in plugin settings."
+                                    return "No DeepSeek balance data."
+                                }
+                            }
+                        }
+                    }
+
+                    // --- OpenRouter card ---
+                    StyledRect {
+                        visible: root.selectedProvider === "openrouter" && root.openRouterEnabled
+                        width: parent.width
+                        height: orCard.implicitHeight + Theme.spacingM * 2
+                        radius: Theme.cornerRadius
+                        color: Theme.surfaceContainerHigh
+
+                        Column {
+                            id: orCard
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingM
+                            spacing: Theme.spacingS
+
+                            StyledText {
+                                visible: root.orBalance() != null
+                                text: "OpenRouter credit balance"
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.Bold
+                            }
+
+                            // OpenRouter balance
+                            Repeater {
+                                model: root.orBalances()
+                                delegate: Row {
+                                    width: parent.width
+                                    spacing: Theme.spacingM
+                                    Image {
+                                        source: root.pluginDir + "assets/openrouter-logo.svg"
+                                        sourceSize.width: 28
+                                        sourceSize.height: 28
+                                        width: 28; height: 28
+                                        fillMode: Image.PreserveAspectFit
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Column {
+                                        width: parent.width - 40 - 28 - Theme.spacingM
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 2
+                                        StyledText { text: "Available balance"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                                        StyledText { text: root.fmtBal(modelData); color: Theme.surfaceText; font.pixelSize: Theme.fontSizeLarge; font.weight: Font.Bold }
+                                        StyledText {
+                                            visible: parseFloat(modelData.purchased) > 0
+                                            text: "Purchased: " + root.fmtMoney(modelData.purchased, modelData.currency)
+                                            color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall
+                                        }
+                                        StyledText {
+                                            visible: parseFloat(modelData.used) > 0
+                                            text: "Used: " + root.fmtMoney(modelData.used, modelData.currency)
+                                            color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall
+                                        }
+                                    }
+                                    Rectangle {
+                                        width: 28; height: 28; radius: 14
+                                        color: root.isPinned("openrouter", "balance")
+                                            ? Theme.surfaceSelected
+                                            : (openRouterPinArea.containsMouse ? Theme.surfaceHover : Theme.surfaceContainerHighest)
+                                        border.color: root.isPinned("openrouter", "balance")
+                                            ? Theme.outlineMedium : Theme.outlineVariant
+                                        border.width: 1
+                                        anchors.verticalCenter: parent.verticalCenter
+
+                                        MouseArea {
+                                            id: openRouterPinArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.togglePin("openrouter", "balance")
+                                        }
+
+                                        DankIcon {
+                                            anchors.centerIn: parent
+                                            name: "push_pin"
+                                            size: 17
+                                            color: root.isPinned("openrouter", "balance")
+                                                ? Theme.primary : Theme.surfaceVariantText
+                                            rotation: root.isPinned("openrouter", "balance") ? 0 : 45
+                                        }
+                                    }
+                                }
+                            }
+
+                            // OpenRouter unavailable
+                            StyledText {
+                                visible: !root.orBalance()
+                                width: parent.width
+                                wrapMode: Text.WordWrap
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                text: {
+                                    if (!root.usageData) return "Loading..."
+                                    var o = root.usageData.openrouter
+                                    if (o && o.error) return o.error
+                                    if (root.openRouterApiKey.length === 0) return "Set OpenRouter API key in plugin settings."
+                                    return "No OpenRouter balance data."
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Grok card ---
+                    StyledRect {
+                        visible: root.selectedProvider === "grok" && root.grokEnabled
+                        width: parent.width
+                        height: grokCard.implicitHeight + Theme.spacingM * 2
+                        radius: Theme.cornerRadius
+                        color: Theme.surfaceContainerHigh
+
+                        Column {
+                            id: grokCard
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingM
+                            spacing: Theme.spacingS
+
+                            StyledText {
+                                visible: root.grokEntries().length > 0
+                                text: root.usageData && root.usageData.grok && root.usageData.grok.plan
+                                    ? "Grok (" + root.usageData.grok.plan + ")" : "Grok"
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.Bold
+                            }
+
+                            Repeater {
+                                model: root.grokEntries()
+                                delegate: Column {
+                                    width: parent.width
+                                    spacing: Theme.spacingS
+                                    Row {
+                                        width: parent.width
+                                        spacing: Theme.spacingM
+                                        Image {
+                                            source: root.pluginDir + "assets/grok-logo.svg"
+                                            sourceSize.width: 28
+                                            sourceSize.height: 28
+                                            width: 28; height: 28
+                                            fillMode: Image.PreserveAspectFit
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                        Column {
+                                            width: parent.width - 40 - 28 - Theme.spacingM
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 2
+                                            StyledText {
+                                                text: root.grokLabel(modelData)
+                                                color: Theme.surfaceVariantText
+                                                font.pixelSize: Theme.fontSizeSmall
+                                            }
+                                            StyledText {
+                                                text: root.pctStr(modelData.percentUsed || 0)
+                                                color: Theme.surfaceText
+                                                font.pixelSize: Theme.fontSizeLarge
+                                                font.weight: Font.Bold
+                                            }
+                                        }
+                                        Rectangle {
+                                            width: 28; height: 28; radius: 14
+                                            color: root.isPinned("grok", modelData.name)
+                                                ? Theme.surfaceSelected
+                                                : (grokPinArea.containsMouse ? Theme.surfaceHover : Theme.surfaceContainerHighest)
+                                            border.color: root.isPinned("grok", modelData.name)
+                                                ? Theme.outlineMedium : Theme.outlineVariant
+                                            border.width: 1
+                                            anchors.verticalCenter: parent.verticalCenter
+
+                                            MouseArea {
+                                                id: grokPinArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.togglePin("grok", modelData.name)
+                                            }
+
+                                            DankIcon {
+                                                anchors.centerIn: parent
+                                                name: "push_pin"
+                                                size: 17
+                                                color: root.isPinned("grok", modelData.name)
+                                                    ? Theme.primary : Theme.surfaceVariantText
+                                                rotation: root.isPinned("grok", modelData.name) ? 0 : 45
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        id: grokProgressTrack
+                                        width: parent.width
+                                        height: 8
+                                        radius: 4
+                                        color: Theme.outlineVariant
+                                        Rectangle {
+                                            width: grokProgressTrack.width * root.limitProgress(modelData.percentUsed || 0) / 100
+                                            height: parent.height
+                                            radius: parent.radius
+                                            color: Theme.primary
+                                        }
+                                    }
+                                    StyledText {
+                                        visible: root.showResetTime && modelData.resetAt > 0
+                                        text: root.resetLabel(modelData.resetAt)
+                                        color: Theme.surfaceVariantText
+                                        font.pixelSize: Theme.fontSizeSmall
+                                    }
+                                }
+                            }
+
+                            StyledText {
+                                visible: root.grokEntries().length === 0
+                                width: parent.width
+                                wrapMode: Text.WordWrap
+                                color: {
+                                    var g = root.usageData && root.usageData.grok
+                                    return g && (g.reason === "not_authenticated" || g.reason === "auth_expired")
+                                        ? Theme.warning : Theme.surfaceVariantText
+                                }
+                                font.pixelSize: Theme.fontSizeSmall
+                                text: {
+                                    if (!root.usageData) return "Loading..."
+                                    var g = root.usageData.grok
+                                    if (g && g.reason === "not_authenticated")
+                                        return "Grok is not connected.\nRun grok login in a terminal, then wait for the next refresh."
+                                    if (g && g.reason === "auth_expired")
+                                        return "Grok login expired.\nRun grok login again, then wait for the next refresh."
+                                    if (g && g.reason === "no_quota")
+                                        return "No Grok usage data."
+                                    if (g && g.error) return g.error
+                                    return "No Grok usage data."
+                                }
+                            }
+                        }
+                    }
+        }
+    }
+}
+}

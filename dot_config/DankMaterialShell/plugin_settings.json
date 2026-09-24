@@ -10,7 +10,9 @@
     "soundEnabled": true,
     "showMetrics": true,
     "catSizePercent": 100,
-    "enableBlinking": true
+    "enableBlinking": true,
+    "catYOffset": 0,
+    "pawHoldTime": 0
   },
   "dankNotepadModule": {
     "enabled": true
@@ -52,7 +54,7 @@
         "volume": 0
       }
     },
-    "restartInterval": 10,
+    "restartInterval": 0,
     "videoLibrary": [
       "/home/osharko/Video/Wallpapers/orange-train-at-sunset.3840x2160.mp4",
       "/home/osharko/Video/Wallpapers/smol-stelle-honkai-star-rail.3840x2160.mp4",
@@ -70,6 +72,8 @@
     "codexEnabled": false,
     "claudeEnabled": false,
     "openCodeWorkspaceId": "",
-    "showResetCountdown": true
+    "showResetCountdown": false,
+    "openCodeEnabled": true,
+    "refreshInterval": 30
   }
 }

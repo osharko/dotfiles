@@ -1,0 +1,34 @@
+{
+  "lockfileVersion": 1,
+  "plugins": {
+    "bongoCat": {
+      "repo": "https://github.com/hthienloc/dms-bongo-cat",
+      "commit": "237b1a34b2fb8d90e4f4c8656af758c3d7dab638"
+    },
+    "cavaVisualizer": {
+      "repo": "https://github.com/ernestowgg/cava-visualizer",
+      "commit": "2d08bef95bc7cd170ad5730a27791c9af6d80a52"
+    },
+    "dankNotepadModule": {
+      "repo": "https://github.com/AvengeMedia/dms-plugins",
+      "path": "DankNotepadModule",
+      "commit": "6fc7f25bfb24f93b6488fb8a36ed67b5f242abdb"
+    },
+    "dockerManager": {
+      "repo": "https://github.com/LuckShiba/DmsDockerManager",
+      "commit": "255f46794b6e3a5f5e842fe1330db3869deddc09"
+    },
+    "mpvpaper": {
+      "repo": "https://github.com/tokisak1kurum1/mpvpaper-plugin",
+      "commit": "a14fcee73e3e91c48664241d5bf78c4e173a6cea"
+    },
+    "screenCaptureToolbar": {
+      "repo": "https://github.com/JDKamalakar/DMS-ScreenCapture_Toolbar",
+      "commit": "332ea98c0fb2e2d26d55a0cda14c3c9b3cd28505"
+    },
+    "wallpaperCarousel": {
+      "repo": "https://github.com/motor-dev/wallpaperCarousel",
+      "commit": "761ecd1b7f347beee9f17909f8334d987c935a1a"
+    }
+  }
+}

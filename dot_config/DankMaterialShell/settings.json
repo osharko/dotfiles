@@ -1,6 +1,15 @@
 {
-  "currentThemeName": "dynamic",
-  "currentThemeCategory": "dynamic",
+  "currentThemeName": "custom",
+  "currentThemeCategory": "registry",
+  "customThemeFile": "/home/osharko/.config/DankMaterialShell/themes/catppuccin/theme.json",
+  "registryThemeVariants": {
+    "catppuccin": {
+      "dark": {
+        "flavor": "mocha",
+        "accent": "sky"
+      }
+    }
+  },
   "matugenScheme": "scheme-expressive",
   "matugenSourceMode": "less-saturation",
   "matugenTargetMonitor": "DP-1",
@@ -66,6 +75,7 @@
   "showDock": true,
   "dockGroupByApp": true,
   "dockOpenOnOverview": true,
+  "dockBorderEnabled": true,
   "dockLauncherEnabled": true,
   "dockLauncherLogoMode": "compositor",
   "dockShowTrash": true,
@@ -349,6 +359,12 @@
     },
     "dms_colorpicker": {
       "enabled": true
+    },
+    "dms_power": {
+      "trigger": "pw"
+    },
+    "dms_qr_generator": {
+      "trigger": "qrg"
     }
   },
   "frameThickness": 20,
