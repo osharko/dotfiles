@@ -7,3 +7,6 @@ source /usr/share/cachyos-fish-config/cachyos-config.fish
 #end
 
 starship init fish | source
+
+# opencode
+fish_add_path /home/osharko/.opencode/bin

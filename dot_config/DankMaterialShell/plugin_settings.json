@@ -1,6 +1,6 @@
 {
   "wallpaperCarousel": {
-    "enabled": true,
+    "enabled": false,
     "wallpaperDirectory": "/home/osharko/Immagini/Wallpapers/dank_wallpapers",
     "borderWidth": 2
   },
@@ -20,7 +20,8 @@
   "dockerManager": {
     "enabled": true,
     "dockerBinary": "podman",
-    "terminalApp": "ghostty --hold"
+    "terminalApp": "ghostty --hold",
+    "groupByCompose": true
   },
   "screenCaptureToolbar": {
     "enabled": true,

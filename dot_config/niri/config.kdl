@@ -244,6 +244,7 @@ window-rule {
     match app-id="zen"
     match app-id="com.mitchellh.ghostty"
     match app-id="kitty"
+    match app-id="com.rafaelmardojai.Blanket"
     draw-border-with-background false
 
     // personal config
