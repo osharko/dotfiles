@@ -1,0 +1,30 @@
+#!/bin/bash
+# Installazione dichiarativa dei pacchetti tramite chezmoi.
+#
+# `chezmoi apply` esegue questo script SOLO quando il suo contenuto cambia.
+# Includendo gli hash delle liste qui sotto, lo script viene rieseguito
+# automaticamente ogni volta che pkglist.txt o foreign-pkglist.txt cambiano.
+#
+# pkglist.txt hash:         {{ include "pkglist.txt" | sha256sum }}
+# foreign-pkglist.txt hash: {{ include "foreign-pkglist.txt" | sha256sum }}
+
+set -euo pipefail
+
+SRC={{ .chezmoi.sourceDir | quote }}
+
+if ! command -v pacman >/dev/null 2>&1; then
+    echo "▸ pacman non trovato: salto l'installazione dei pacchetti"
+    exit 0
+fi
+
+echo "▸ Installing official packages (pkglist.txt)..."
+xargs -d '\n' sudo pacman -S --needed --noconfirm < "$SRC/pkglist.txt"
+
+if command -v paru >/dev/null 2>&1; then
+    echo "▸ Installing AUR packages (foreign-pkglist.txt)..."
+    xargs -d '\n' paru -S --needed --noconfirm < "$SRC/foreign-pkglist.txt"
+else
+    echo "⚠ paru non trovato: salto i pacchetti AUR"
+fi
+
+echo "✓ Pacchetti installati"
