@@ -7,7 +7,7 @@
 # e viene creato un backup *.chezmoi.bak prima di modificare un file PAM.
 #
 # Per forzare una riesecuzione senza cambiare altro, incrementa `version`.
-# version: 2
+# version: 3
 set -euo pipefail
 
 PAMDIR=/etc/pam.d
@@ -64,12 +64,19 @@ echo "▸ PAM: gnome-keyring (sblocco keyring al login)"
 append_line "$PAMDIR/system-auth" "auth       optional     pam_gnome_keyring.so"
 append_line "$PAMDIR/system-auth" "session    optional     pam_gnome_keyring.so auto_start"
 
-echo "▸ DMS: sync auth per lock screen e greeter..."
+# Greeter (login) e lock screen hanno PAM separati:
+#   - greeter  → /etc/pam.d/greetd        → `dms-greeter sync --auth`
+#   - lock     → /etc/pam.d/dankshell     → `dms auth sync`
+echo "▸ DMS: sync auth del greeter (login)..."
 if command -v dms-greeter >/dev/null 2>&1; then
-    # Comando documentato da DMS per applicare l'auth (fingerprint/U2F) al greeter.
     DMS_PRIVESC=sudo dms-greeter sync --auth -y 2>&1 | sed 's/^/  /' \
         || echo "  ⚠ 'dms-greeter sync --auth' non riuscito; esegui a mano: DMS_PRIVESC=sudo dms-greeter sync --auth"
-elif command -v dms >/dev/null 2>&1; then
+else
+    echo "  · dms-greeter non trovato, salto"
+fi
+
+echo "▸ DMS: sync auth del lock screen..."
+if command -v dms >/dev/null 2>&1; then
     DMS_PRIVESC=sudo dms auth sync -y 2>&1 | sed 's/^/  /' \
         || echo "  ⚠ 'dms auth sync' non riuscito; esegui a mano: DMS_PRIVESC=sudo dms auth sync"
 else
