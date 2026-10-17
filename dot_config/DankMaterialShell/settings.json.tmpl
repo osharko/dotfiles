@@ -66,8 +66,9 @@
     }
   ],
   "showWorkspaceApps": true,
-  {{/* Auto-login e impronta: attivi solo sul Dell (ha il lettore), invariati sul mini. */}}
-  "greeterAutoLogin": {{ if eq .chezmoi.hostname "osharko-dell" }}false{{ else }}true{{ end }},
+  {{/* Auto-login su TUTTI i PC: col disco cifrato l'auth utente al login è ridondante. */}}
+  "greeterAutoLogin": true,
+  {{/* Impronta: attiva solo sul Dell (ha il lettore). */}}
   "greeterEnableFprint": {{ if eq .chezmoi.hostname "osharko-dell" }}true{{ else }}false{{ end }},
   "enableFprint": {{ if eq .chezmoi.hostname "osharko-dell" }}true{{ else }}false{{ end }},
   "appDrawerSectionViewModes": {
