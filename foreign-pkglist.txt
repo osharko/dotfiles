@@ -4,6 +4,8 @@ dankcalendar-bin
 distroshelf
 dsearch-bin
 greetd-dms-greeter-bin
+libfprint-2-tod1-broadcom-cv3plus
+libfprint-tod
 ocrmypdf
 python-fpdf2
 qt6ct-kde

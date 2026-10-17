@@ -82,6 +82,7 @@ ghostty
 git
 glances
 gnome-boxes
+gnome-keyring
 greetd
 gsfonts
 gst-libav

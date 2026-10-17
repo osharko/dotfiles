@@ -183,7 +183,8 @@ chezmoi apply
 echo "✓ Bootstrap complete — reboot recommended"
 
 
-# broadcom fingerprint 
-# paru -Sy --noconfirm libfprint-tod libfprint-2-tod1-broadcom-cv3plus paru -Sy 
-# --noconfirm fprintd gnome-keyring
-# sudo systemctl enable --now fprintd
+# Fingerprint / auth (fprintd, driver Broadcom TOD, gnome-keyring, PAM, lock DMS):
+# i pacchetti sono in pkglist.txt (fprintd, gnome-keyring) e foreign-pkglist.txt
+# (libfprint-tod, libfprint-2-tod1-broadcom-cv3plus); la configurazione di sistema
+# (fprintd + PAM + keyring + 'dms auth sync') è in
+# .chezmoiscripts/run_onchange_setup-auth.sh ed è eseguita da `chezmoi apply`.
