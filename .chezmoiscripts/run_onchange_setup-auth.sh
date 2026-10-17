@@ -7,7 +7,7 @@
 # e viene creato un backup *.chezmoi.bak prima di modificare un file PAM.
 #
 # Per forzare una riesecuzione senza cambiare altro, incrementa `version`.
-# version: 3
+# version: 4
 set -euo pipefail
 
 PAMDIR=/etc/pam.d
@@ -71,6 +71,9 @@ echo "▸ DMS: sync auth del greeter (login)..."
 if command -v dms-greeter >/dev/null 2>&1; then
     DMS_PRIVESC=sudo dms-greeter sync --auth -y 2>&1 | sed 's/^/  /' \
         || echo "  ⚠ 'dms-greeter sync --auth' non riuscito; esegui a mano: DMS_PRIVESC=sudo dms-greeter sync --auth"
+    # Applica/rimuove l'auto-login su greetd in base a greeterAutoLogin.
+    DMS_PRIVESC=sudo dms-greeter sync --autologin -y 2>&1 | sed 's/^/  /' \
+        || echo "  ⚠ 'dms-greeter sync --autologin' non riuscito; esegui a mano: DMS_PRIVESC=sudo dms-greeter sync --autologin"
 else
     echo "  · dms-greeter non trovato, salto"
 fi
